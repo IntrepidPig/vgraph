@@ -1,0 +1,8 @@
+[package]
+name = "vgraph"
+version = "0.1.0"
+authors = ["Benny A <virusdownloader7@gmail.com>"]
+
+[dependencies]
+mexprp =  { git = "https://github.com/IntrepidPig/mexprp" }
+vrender = { git = "https://github.com/IntrepidPig/vrender" }

@@ -1,12 +1,32 @@
 extern crate mexprp;
 extern crate vrender;
+extern crate gtk;
+#[macro_use]
+extern crate relm;
+#[macro_use]
+extern crate relm_derive;
 
-use mexprp::{Expr, Context};
-use vrender::{App};
-use vrender::td::{Vertex, Camera, Color, Vec3};
+use std::collections::HashMap;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+use relm::Widget;
+
+use mexprp::Expr;
+use vrender::{App, Renderer};
+use vrender::render::{Render};
+use vrender::obj::{Object, Mesh};
+use vrender::td::{Vertex, Camera, Vec3};
 use vrender::math::{PerspectiveFov, Deg, Euler, InnerSpace, Zero};
-use vrender::window::{self, Event, WindowEvent, DeviceEvent};
+use vrender::window::{self, Event};
 
+mod td;
+mod gui;
+
+use td::Graph;
+
+#[allow(dead_code)]
 static DATA: ([Vertex; 8], [u32; 36]) = (
 	[
 		Vertex { a_Pos: [-0.25, -0.25, -0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
@@ -64,12 +84,11 @@ impl Player {
 	}
 }
 
-
 struct Grapher {
-	eqns: Vec<Expr>,
+	new_eqns: Arc<Mutex<Option<Vec<String>>>>,
+	graphs: Vec<String>,
 	player: Player,
 	running: bool,
-	data: Vec<(Vec<Vertex>, Vec<u32>)>,
 	move_z: (bool, bool),
 	move_x: (bool, bool),
 	move_y: (bool, bool),
@@ -80,9 +99,10 @@ struct Grapher {
 }
 
 impl Grapher {
-	pub fn new() -> Grapher {
+	pub fn new(new_eqns: Arc<Mutex<Option<Vec<String>>>>) -> Self {
 		Grapher {
-			eqns: vec![Expr::from("(x * z) / 4").unwrap()],
+			new_eqns,
+			graphs: vec![],
 			player: Player {
 				camera: Camera::new(PerspectiveFov {
 					fovy: Deg(90.0).into(),
@@ -93,7 +113,6 @@ impl Grapher {
 				speed: 3.5,
 			},
 			running: true,
-			data: Vec::new(),
 			move_z: (false, false),
 			move_x: (false, false),
 			move_y: (false, false),
@@ -105,57 +124,16 @@ impl Grapher {
 	}
 	
 	fn regen_data(&mut self) {
-		fn calc(x: f64, z: f64, t: f32, expr: &Expr) -> Vertex {
-			let mut ctx = Context::new();
-			ctx.add("x", x as f64);
-			ctx.add("z", z as f64);
-			ctx.add("t", t as f64);
-			let y = expr.eval_ctx(&ctx).unwrap() as f32;
-			let x = x as f32;
-			let z = z as f32;
-			Vertex::new(x, -y, z, 1.0, Color::green())
-		}
-		self.data.clear();
-		for expr in &self.eqns {
-			let mut verts = Vec::with_capacity(self.steps as usize * self.steps as usize * 4);
-			let mut indices = Vec::with_capacity(self.steps as usize * self.steps as usize * 6);
-			let mut index = 0;
-			let mut x = -self.range;
-			let mut z = -self.range;
-			while x < self.range {
-				while z < self.range {
-					verts.push(calc(x, z, self.time, &expr));
-					verts.push(calc(x + 1.0, z, self.time, &expr));
-					verts.push(calc(x, z + 1.0, self.time, &expr));
-					verts.push(calc(x + 1.0, z + 1.0, self.time, &expr));
-					indices.push(index * 4);
-					indices.push(index * 4 + 1);
-					indices.push(index * 4 + 2);
-					indices.push(index * 4 + 2);
-					indices.push(index * 4 + 3);
-					indices.push(index * 4 + 1);
-					index += 1;
-					z += self.range * 2.0 / self.steps as f64;
-				}
-				z = -self.range;
-				x += self.range * 2.0 / self.steps as f64;
-			}
-			self.data.push((verts, indices));
-		}
-		self.data.push((Vec::from(DATA.0.as_ref()), Vec::from(DATA.1.as_ref())));
+	
 	}
 }
 
 impl App for Grapher {
-	fn get_data(&self) -> &Vec<(Vec<Vertex>, Vec<u32>)> {
-		&self.data
-	}
-	
 	fn get_camera(&mut self) -> &mut Camera {
 		&mut self.player.camera
 	}
 	
-	fn handle_event(&mut self, event: Event) {
+	fn handle_event(&mut self, event: Event, objects: &mut HashMap<String, Object>) {
 		use window::Event;
 		use window::DeviceEvent;
 		use window::WindowEvent;
@@ -170,7 +148,7 @@ impl App for Grapher {
 					self.running = false;
 				},
 				WindowEvent::KeyboardInput {
-					device_id: _, input: KeyboardInput { scancode: _, state, virtual_keycode: key, modifiers: mods }
+					device_id: _, input: KeyboardInput { scancode: _, state, virtual_keycode: key, modifiers: _mods }
 				} => {
 					match state {
 						ElementState::Pressed => {
@@ -193,7 +171,13 @@ impl App for Grapher {
 								Some(Space) => self.move_y.0 = false,
 								Some(LShift) => self.move_y.1 = false,
 								Some(Return) => self.get_eqn = true,
-								Some(RShift) => self.eqns.clear(),
+								Some(RShift) => {
+									let mut swapped = Vec::new();
+									std::mem::swap(&mut swapped, &mut self.graphs);
+									for key in swapped {
+										objects.remove(&key);
+									}
+								},
 								_ => {},
 							}
 						}
@@ -219,7 +203,7 @@ impl App for Grapher {
 		}
 	}
 	
-	fn update(&mut self, ms: f32) {
+	fn update(&mut self, ms: f32, objects: &mut HashMap<String, Object>) {
 		self.regen_data();
 		let mut movement: Vec3 = Vec3::zero();
 		if self.move_x.0 { movement.x -= 1.0 };
@@ -231,31 +215,39 @@ impl App for Grapher {
 		
 		self.player.walk(movement * ms / 200.0);
 		
-		if self.get_eqn {
-			self.get_eqn = false;
-			let raw = {
-				let mut x = String::new();
-				std::io::stdin().read_line(&mut x).expect("Failed to read input");
-				x
-			};
-			match Expr::from(&raw) {
-				Ok(expr) => {
-					self.eqns.push(expr);
-				},
-				Err(e) => {
-					println!("{}", e);
+		if let Some(new_eqns) = self.new_eqns.lock().unwrap().take() {
+			for raw in new_eqns {
+				match Expr::from(&raw) {
+					Ok(expr) => {
+						self.graphs.push(raw.clone());
+						let graph = Graph::new(expr, self.steps, self.range);
+						let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
+						objects.insert(raw, Object::from_mesh(mesh));
+					},
+					Err(e) => {
+						println!("{}", e);
+					}
 				}
 			}
 		}
+		
 		self.time += ms;
 	}
 	
-	fn is_running(&mut self) -> &mut bool {
-		&mut self.running
+	fn is_running(&self) -> bool {
+		self.running
 	}
 }
 
 fn main() {
-	let mut app = Grapher::new();
-	app.run();
+	let new_eqns = Arc::new(Mutex::new(None));
+	let clone = Arc::clone(&new_eqns);
+	
+	let handle = thread::spawn(move || gui::Win::run(clone).unwrap());
+	
+	let app = Grapher::new(new_eqns);
+	let mut renderer = Renderer::new(app);
+	renderer.run();
+	
+	handle.join().unwrap();
 }

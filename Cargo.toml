@@ -5,4 +5,7 @@ authors = ["Benny A <virusdownloader7@gmail.com>"]
 
 [dependencies]
 mexprp =  { git = "https://github.com/IntrepidPig/mexprp" }
-vrender = { git = "https://github.com/IntrepidPig/vrender" }
+vrender = { path = "../vrender" }
+gtk = "0.3"
+relm = "0.11"
+relm-derive = "0.11"

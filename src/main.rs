@@ -86,8 +86,7 @@ impl Player {
 }
 
 struct Grapher {
-	eqn_recvr: Receiver<String>,
-	graphs: Vec<String>,
+	eqn_recvr: Receiver<Vec<String>>,
 	player: Player,
 	running: bool,
 	move_z: (bool, bool),
@@ -100,10 +99,9 @@ struct Grapher {
 }
 
 impl Grapher {
-	pub fn new(eqn_recvr: Receiver<String>) -> Self {
+	pub fn new(eqn_recvr: Receiver<Vec<String>>) -> Self {
 		Grapher {
 			eqn_recvr,
-			graphs: vec![],
 			player: Player {
 				camera: Camera::new(PerspectiveFov {
 					fovy: Deg(90.0).into(),
@@ -203,16 +201,18 @@ impl App for Grapher {
 		
 		self.player.walk(movement * ms / 200.0);
 		
-		if let Ok(new_eqn) = self.eqn_recvr.try_recv() {
-			match Expr::from(&new_eqn) {
-				Ok(expr) => {
-					self.graphs.push(new_eqn.clone());
-					let graph = Graph::new(expr, self.steps, self.range);
-					let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
-					objects.insert(new_eqn, Object::from_mesh(mesh));
-				},
-				Err(e) => {
-					println!("{}", e);
+		if let Ok(new_eqns) = self.eqn_recvr.try_recv() {
+			objects.clear();
+			for new_eqn in &new_eqns {
+				match Expr::from(&new_eqn) {
+					Ok(expr) => {
+						let graph = Graph::new(expr, self.steps, self.range);
+						let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
+						objects.insert(new_eqn.to_string(), Object::from_mesh(mesh));
+					},
+					Err(e) => {
+						println!("{}", e);
+					}
 				}
 			}
 		}
@@ -226,7 +226,7 @@ impl App for Grapher {
 }
 
 fn main() {
-	let (tx, rx) = mpsc::channel::<String>();
+	let (tx, rx) = mpsc::channel::<Vec<String>>();
 	
 	let app = Grapher::new(rx);
 	let mut renderer = Renderer::new(app);

@@ -5,7 +5,7 @@ use gtk::{ButtonExt, WidgetExt, ContainerExt, TextViewExt, TextBufferExt};
 use relm::{Widget, Update, Relm};
 
 pub struct Model {
-	eqn_sender: Sender<String>,
+	eqn_sender: Sender<Vec<String>>,
 }
 
 pub struct Win {
@@ -16,7 +16,7 @@ pub struct Win {
 
 impl Update for Win {
 	type Model = Model;
-	type ModelParam = Sender<String>;
+	type ModelParam = Sender<Vec<String>>;
 	type Msg = Msg;
 	
 	fn model(_: &Relm<Self>, param: Self::ModelParam) -> Self::Model {
@@ -31,9 +31,7 @@ impl Update for Win {
 				let buf = self.entry.get_buffer().unwrap();
 				let (start, end) = buf.get_bounds();
 				let raw = buf.get_text(&start, &end, false).unwrap();
-				for line in raw.lines() {
-					self.model.eqn_sender.send(line.to_string());
-				}
+				self.model.eqn_sender.send(raw.lines().map(|l| l.to_string()).collect());
 			},
 			Msg::Quit => {
 				gtk::main_quit();

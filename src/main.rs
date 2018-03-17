@@ -8,8 +8,9 @@ extern crate relm_derive;
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
+use std::sync::mpsc::{self, Sender, Receiver};
 
 use relm::Widget;
 
@@ -85,7 +86,7 @@ impl Player {
 }
 
 struct Grapher {
-	new_eqns: Arc<Mutex<Option<Vec<String>>>>,
+	eqn_recvr: Receiver<String>,
 	graphs: Vec<String>,
 	player: Player,
 	running: bool,
@@ -99,9 +100,9 @@ struct Grapher {
 }
 
 impl Grapher {
-	pub fn new(new_eqns: Arc<Mutex<Option<Vec<String>>>>) -> Self {
+	pub fn new(eqn_recvr: Receiver<String>) -> Self {
 		Grapher {
-			new_eqns,
+			eqn_recvr,
 			graphs: vec![],
 			player: Player {
 				camera: Camera::new(PerspectiveFov {
@@ -121,10 +122,6 @@ impl Grapher {
 			steps: 16u32,
 			time: 0f32,
 		}
-	}
-	
-	fn regen_data(&mut self) {
-	
 	}
 }
 
@@ -170,14 +167,6 @@ impl App for Grapher {
 								Some(D) => self.move_x.1 = false,
 								Some(Space) => self.move_y.0 = false,
 								Some(LShift) => self.move_y.1 = false,
-								Some(Return) => self.get_eqn = true,
-								Some(RShift) => {
-									let mut swapped = Vec::new();
-									std::mem::swap(&mut swapped, &mut self.graphs);
-									for key in swapped {
-										objects.remove(&key);
-									}
-								},
 								_ => {},
 							}
 						}
@@ -204,7 +193,6 @@ impl App for Grapher {
 	}
 	
 	fn update(&mut self, ms: f32, objects: &mut HashMap<String, Object>) {
-		self.regen_data();
 		let mut movement: Vec3 = Vec3::zero();
 		if self.move_x.0 { movement.x -= 1.0 };
 		if self.move_x.1 { movement.x += 1.0 };
@@ -215,18 +203,16 @@ impl App for Grapher {
 		
 		self.player.walk(movement * ms / 200.0);
 		
-		if let Some(new_eqns) = self.new_eqns.lock().unwrap().take() {
-			for raw in new_eqns {
-				match Expr::from(&raw) {
-					Ok(expr) => {
-						self.graphs.push(raw.clone());
-						let graph = Graph::new(expr, self.steps, self.range);
-						let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
-						objects.insert(raw, Object::from_mesh(mesh));
-					},
-					Err(e) => {
-						println!("{}", e);
-					}
+		if let Ok(new_eqn) = self.eqn_recvr.try_recv() {
+			match Expr::from(&new_eqn) {
+				Ok(expr) => {
+					self.graphs.push(new_eqn.clone());
+					let graph = Graph::new(expr, self.steps, self.range);
+					let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
+					objects.insert(new_eqn, Object::from_mesh(mesh));
+				},
+				Err(e) => {
+					println!("{}", e);
 				}
 			}
 		}
@@ -240,14 +226,17 @@ impl App for Grapher {
 }
 
 fn main() {
-	let new_eqns = Arc::new(Mutex::new(None));
-	let clone = Arc::clone(&new_eqns);
+	let (tx, rx) = mpsc::channel::<String>();
 	
-	let handle = thread::spawn(move || gui::Win::run(clone).unwrap());
-	
-	let app = Grapher::new(new_eqns);
+	let app = Grapher::new(rx);
 	let mut renderer = Renderer::new(app);
-	renderer.run();
+	
+	let handle = thread::spawn(move || {
+		thread::sleep(Duration::new(2, 0)); // Awful hack
+		renderer.run();
+	});
+	
+	gui::Win::run(tx).unwrap();
 	
 	handle.join().unwrap();
 }

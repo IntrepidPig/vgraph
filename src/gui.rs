@@ -1,11 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::Sender;
 
 use gtk::{self, Window, WindowType, Inhibit, TextView, Button, Box, Orientation, TextBuffer};
 use gtk::{ButtonExt, WidgetExt, ContainerExt, TextViewExt, TextBufferExt};
 use relm::{Widget, Update, Relm};
 
 pub struct Model {
-	new_eqns: Arc<Mutex<Option<Vec<String>>>>,
+	eqn_sender: Sender<String>,
 }
 
 pub struct Win {
@@ -16,26 +16,24 @@ pub struct Win {
 
 impl Update for Win {
 	type Model = Model;
-	type ModelParam = Arc<Mutex<Option<Vec<String>>>>;
+	type ModelParam = Sender<String>;
 	type Msg = Msg;
 	
 	fn model(_: &Relm<Self>, param: Self::ModelParam) -> Self::Model {
 		Self::Model {
-			new_eqns: param,
+			eqn_sender: param,
 		}
 	}
 	
 	fn update(&mut self, event: Msg) {
 		match event {
 			Msg::Apply => {
-				let mut eqns = Vec::new();
 				let buf = self.entry.get_buffer().unwrap();
 				let (start, end) = buf.get_bounds();
 				let raw = buf.get_text(&start, &end, false).unwrap();
 				for line in raw.lines() {
-					eqns.push(line.to_string());
+					self.model.eqn_sender.send(line.to_string());
 				}
-				*self.model.new_eqns.lock().unwrap() = Some(eqns);
 			},
 			Msg::Quit => {
 				gtk::main_quit();

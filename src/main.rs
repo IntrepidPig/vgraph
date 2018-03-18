@@ -15,12 +15,12 @@ use std::sync::mpsc::{self, Sender, Receiver};
 use relm::Widget;
 
 use mexprp::Expr;
-use vrender::{App, Renderer};
+use vrender::{App, Renderer, Context};
 use vrender::render::{Render};
 use vrender::obj::{Object, Mesh};
 use vrender::td::{Vertex, Camera, Vec3};
 use vrender::math::{PerspectiveFov, Deg, Euler, InnerSpace, Zero};
-use vrender::window::{self, Event};
+use vrender::window::{self, Event, CursorState, MouseCursor, MouseButton, ElementState};
 
 mod td;
 mod gui;
@@ -92,6 +92,7 @@ struct Grapher {
 	move_z: (bool, bool),
 	move_x: (bool, bool),
 	move_y: (bool, bool),
+	captured: bool,
 	get_eqn: bool,
 	range: f64,
 	steps: u32,
@@ -115,9 +116,10 @@ impl Grapher {
 			move_z: (false, false),
 			move_x: (false, false),
 			move_y: (false, false),
+			captured: false,
 			get_eqn: false,
-			range: 8f64,
-			steps: 16u32,
+			range: 16f64,
+			steps: 128u32,
 			time: 0f32,
 		}
 	}
@@ -128,7 +130,7 @@ impl App for Grapher {
 		&mut self.player.camera
 	}
 	
-	fn handle_event(&mut self, event: Event, objects: &mut HashMap<String, Object>) {
+	fn handle_event(&mut self, event: Event, context: Context) {
 		use window::Event;
 		use window::DeviceEvent;
 		use window::WindowEvent;
@@ -138,8 +140,13 @@ impl App for Grapher {
 		match event {
 			Event::WindowEvent { event, .. } => match event {
 				WindowEvent::KeyboardInput {
-					device_id: _, input: KeyboardInput { scancode: _, state: _, virtual_keycode: Some(Escape), modifiers: _ }
-				} | WindowEvent::Closed => {
+					device_id: _, input: KeyboardInput { scancode: _, state: ElementState::Released, virtual_keycode: Some(Escape), modifiers: _ }
+				} => {
+					self.captured = false;
+					context.window.set_cursor_state(CursorState::Normal);
+					context.window.set_cursor(MouseCursor::Default);
+				},
+				WindowEvent::Closed => {
 					self.running = false;
 				},
 				WindowEvent::KeyboardInput {
@@ -170,18 +177,29 @@ impl App for Grapher {
 						}
 					}
 				},
+				WindowEvent::MouseInput {
+					device_id: _, state, button, modifiers: _
+				} => {
+					if button == MouseButton::Left && state == ElementState::Pressed {
+						self.captured = true;
+						context.window.set_cursor_state(CursorState::Grab).unwrap();
+						context.window.set_cursor(MouseCursor::NoneCursor);
+					}
+				},
 				_ => {}
 			},
 			Event::DeviceEvent { event, .. } => match event {
 				DeviceEvent::Motion { axis, value } => {
-					match axis {
-						0 => {
-							self.player.spin(Deg((value / 200.0f64) as f32));
-						},
-						1 => {
-							self.player.crane(Deg((value / 200.0f64) as f32));
-						},
-						_ => {}
+					if self.captured {
+						match axis {
+							0 => {
+								self.player.spin(Deg((value / 200.0f64) as f32));
+							},
+							1 => {
+								self.player.crane(Deg((value / 200.0f64) as f32));
+							},
+							_ => {}
+						}
 					}
 				},
 				_ => {}
@@ -190,7 +208,7 @@ impl App for Grapher {
 		}
 	}
 	
-	fn update(&mut self, ms: f32, objects: &mut HashMap<String, Object>) {
+	fn update(&mut self, ms: f32, context: Context) {
 		let mut movement: Vec3 = Vec3::zero();
 		if self.move_x.0 { movement.x -= 1.0 };
 		if self.move_x.1 { movement.x += 1.0 };
@@ -199,16 +217,18 @@ impl App for Grapher {
 		if self.move_z.0 { movement.z += 1.0 };
 		if self.move_z.1 { movement.z -= 1.0 };
 		
-		self.player.walk(movement * ms / 200.0);
+		if self.captured {
+			self.player.walk(movement * ms / 200.0);
+		}
 		
 		if let Ok(new_eqns) = self.eqn_recvr.try_recv() {
-			objects.clear();
+			context.targets.clear();
 			for new_eqn in &new_eqns {
 				match Expr::from(&new_eqn) {
 					Ok(expr) => {
 						let graph = Graph::new(expr, self.steps, self.range);
 						let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
-						objects.insert(new_eqn.to_string(), Object::from_mesh(mesh));
+						context.targets.insert(new_eqn.to_string(), Object::from_mesh(mesh));
 					},
 					Err(e) => {
 						println!("{}", e);
@@ -228,11 +248,10 @@ impl App for Grapher {
 fn main() {
 	let (tx, rx) = mpsc::channel::<Vec<String>>();
 	
-	let app = Grapher::new(rx);
-	let mut renderer = Renderer::new(app);
-	
-	let handle = thread::spawn(move || {
+	let handle = thread::spawn(|| {
 		thread::sleep(Duration::new(2, 0)); // Awful hack
+		let app = Grapher::new(rx);
+		let mut renderer = Renderer::new(app);
 		renderer.run();
 	});
 	

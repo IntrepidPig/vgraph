@@ -27,7 +27,7 @@ mod gui;
 
 use td::Graph;
 
-#[allow(dead_code)]
+/*#[allow(dead_code)]
 static DATA: ([Vertex; 8], [u32; 36]) = (
 	[
 		Vertex { a_Pos: [-0.25, -0.25, -0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
@@ -47,7 +47,7 @@ static DATA: ([Vertex; 8], [u32; 36]) = (
 		3, 0, 7, 7, 4, 0, // left
 		4, 5, 6, 6, 7, 4, // bottom
 	]
-);
+);*/
 
 
 struct Player {

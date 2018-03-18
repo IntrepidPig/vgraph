@@ -31,8 +31,12 @@ impl Graph {
 			let y = expr.eval_ctx(&ctx).unwrap() as f32;
 			let x = x as f32;
 			let z = z as f32;
-			Vertex::new(x, -y, z, 1.0, Color::green())
-		}
+			Vertex {
+                a_Pos: [x, -y, z, 1.0],
+                a_Color: [0.0, 1.0, 0.0, 1.0],
+                a_Normal: [0.0, 1.0, 0.0],
+            }
+        }
 		
 		let mut verts = Vec::with_capacity(self.steps as usize * self.steps as usize * 4);
 		let mut indices = Vec::with_capacity(self.steps as usize * self.steps as usize * 6);

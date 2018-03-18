@@ -1,6 +1,6 @@
 use std::sync::mpsc::Sender;
 
-use gtk::{self, Window, WindowType, Inhibit, TextView, Button, Box, Orientation, TextBuffer};
+use gtk::{self, Window, WindowType, Inhibit, TextView, Button, Box, Orientation};
 use gtk::{ButtonExt, WidgetExt, ContainerExt, TextViewExt, TextBufferExt};
 use relm::{Widget, Update, Relm};
 
@@ -31,7 +31,7 @@ impl Update for Win {
 				let buf = self.entry.get_buffer().unwrap();
 				let (start, end) = buf.get_bounds();
 				let raw = buf.get_text(&start, &end, false).unwrap();
-				self.model.eqn_sender.send(raw.lines().map(|l| l.to_string()).collect());
+				self.model.eqn_sender.send(raw.lines().map(|l| l.to_string()).collect()).unwrap();
 			},
 			Msg::Quit => {
 				gtk::main_quit();

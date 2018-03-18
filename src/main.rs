@@ -6,11 +6,9 @@ extern crate relm;
 #[macro_use]
 extern crate relm_derive;
 
-use std::collections::HashMap;
-use std::io::Write;
 use std::thread;
 use std::time::Duration;
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::mpsc::{self, Receiver};
 
 use relm::Widget;
 
@@ -18,9 +16,9 @@ use mexprp::Expr;
 use vrender::{App, Renderer, Context};
 use vrender::render::{Render};
 use vrender::obj::{Object, Mesh};
-use vrender::td::{Vertex, Camera, Vec3};
+use vrender::td::{Camera, Vec3};
 use vrender::math::{PerspectiveFov, Deg, Euler, InnerSpace, Zero};
-use vrender::window::{self, Event, CursorState, MouseCursor, MouseButton, ElementState};
+use vrender::window::{self, Event, CursorState, MouseCursor, MouseButton};
 
 mod td;
 mod gui;
@@ -93,7 +91,6 @@ struct Grapher {
 	move_x: (bool, bool),
 	move_y: (bool, bool),
 	captured: bool,
-	get_eqn: bool,
 	range: f64,
 	steps: u32,
 	time: f32,
@@ -117,9 +114,8 @@ impl Grapher {
 			move_x: (false, false),
 			move_y: (false, false),
 			captured: false,
-			get_eqn: false,
-			range: 16f64,
-			steps: 128u32,
+			range: 32f64,
+			steps: 256u32,
 			time: 0f32,
 		}
 	}
@@ -143,7 +139,7 @@ impl App for Grapher {
 					device_id: _, input: KeyboardInput { scancode: _, state: ElementState::Released, virtual_keycode: Some(Escape), modifiers: _ }
 				} => {
 					self.captured = false;
-					context.window.set_cursor_state(CursorState::Normal);
+					context.window.set_cursor_state(CursorState::Normal).unwrap();
 					context.window.set_cursor(MouseCursor::Default);
 				},
 				WindowEvent::Closed => {

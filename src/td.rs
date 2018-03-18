@@ -1,5 +1,5 @@
 use mexprp::{Expr, Context};
-use vrender::td::{Vertex, Color};
+use vrender::td::Vertex;
 use vrender::render::Render;
 
 pub struct Graph {

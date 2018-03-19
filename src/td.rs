@@ -1,6 +1,5 @@
 use mexprp::{Expr, Context};
 use vrender::td::Vertex;
-use vrender::render::Render;
 
 pub struct Graph {
 	eqn: Expr,
@@ -64,10 +63,8 @@ impl Graph {
 		self.verts = Some(verts);
 		self.indcs = Some(indices)
 	}
-}
 
-impl Render for Graph {
-	fn vbuf(&self) -> &[Vertex] {
+	pub fn vbuf(&self) -> &[Vertex] {
 		if self.verts.is_some() {
 			self.verts.as_ref().unwrap().as_slice()
 		} else {
@@ -75,7 +72,7 @@ impl Render for Graph {
 		}
 	}
 	
-	fn ibuf(&self) -> &[u32] {
+	pub fn ibuf(&self) -> &[u32] {
 		if self.indcs.is_some() {
 			self.indcs.as_ref().unwrap().as_slice()
 		} else {

@@ -14,7 +14,6 @@ use relm::Widget;
 
 use mexprp::Expr;
 use vrender::{App, Renderer, Context};
-use vrender::render::{Render};
 use vrender::obj::{Object, Mesh};
 use vrender::td::{Camera, Vec3};
 use vrender::math::{PerspectiveFov, Deg, Euler, InnerSpace, Zero};
@@ -24,29 +23,6 @@ mod td;
 mod gui;
 
 use td::Graph;
-
-/*#[allow(dead_code)]
-static DATA: ([Vertex; 8], [u32; 36]) = (
-	[
-		Vertex { a_Pos: [-0.25, -0.25, -0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [ 0.25, -0.25, -0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [ 0.25, -0.25,  0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [-0.25, -0.25,  0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [-0.25,  0.25, -0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [ 0.25,  0.25, -0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [ 0.25,  0.25,  0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-		Vertex { a_Pos: [-0.25,  0.25,  0.25, 1.0], a_Color: [0.0, 0.0, 1.0, 1.0] },
-	],
-	[
-		0, 1, 2, 2, 3, 0, // top
-		0, 1, 4, 4, 5, 1, // front
-		1, 2, 5, 5, 6, 2, // right
-		2, 3, 6, 6, 7, 3, // back
-		3, 0, 7, 7, 4, 0, // left
-		4, 5, 6, 6, 7, 4, // bottom
-	]
-);*/
-
 
 struct Player {
 	pub camera: Camera,
@@ -223,7 +199,7 @@ impl App for Grapher {
 				match Expr::from(&new_eqn) {
 					Ok(expr) => {
 						let graph = Graph::new(expr, self.steps, self.range);
-						let mesh = Mesh::new(graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
+						let mesh = Mesh::new(context.internal, graph.vbuf().to_vec(), graph.ibuf().to_vec()).unwrap();
 						context.targets.insert(new_eqn.to_string(), Object::from_mesh(mesh));
 					},
 					Err(e) => {
